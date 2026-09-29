@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="uz" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maktab Fanlaridan Onlayn Testlar va Natijalar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- PDF va rasmga olish kutubxonalari -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- Firebase Kutubxonalari (SDK v10) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // --- FIREBASE SOZLAMALARI (O'zingizning Firebase ma'lumotlaringizni shu yerga kiriting) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyC-sN9JFt6nUWTxSYK2fs8U4DtJpo9N_ZU",
+            authDomain: "online-maktab-testlari.firebaseapp.com",
+            projectId: "online-maktab-testlari",
+            storageBucket: "online-maktab-testlari.firebasestorage.app",
+            messagingSenderId: "268900293870",
+            appId: "1:268900293870:web:16ea78a653851dd6dde7ff"
+        };
+
+        // Firebase'ni ishga tushirish
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Global funksiyalarga biriktirish (skriptlar ishlashi uchun)
+        window.saveResultToFirebase = async function(resultData) {
+            try {
+                await addDoc(collection(db, "quiz_results"), {
+                    ...resultData,
+                    timestamp: serverTimestamp()
+                });
+                loadLeaderboardFromFirebase('Barchasi');
+            } catch (error) {
+                console.error("Firebase'ga yozishda xatolik:", error);
+            }
+        };
+
+        window.loadLeaderboardFromFirebase = async function(filterSubject = 'Barchasi') {
+            let tbody = document.getElementById("full-leaderboard-body");
+            let noMsg = document.getElementById("no-results-msg");
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-indigo-500"><i class="fas fa-spinner fa-spin mr-2"></i> Ma'lumotlar yuklanmoqda...</td></tr>`;
+
+            try {
+                const q = query(collection(db, "quiz_results"), orderBy("timestamp", "desc"));
+                const querySnapshot = await getDocs(q);
+                let results = [];
+                querySnapshot.forEach((docSnap) => {
+                    results.push({ id: docSnap.id, ...docSnap.data() });
+                });
+
+                tbody.innerHTML = "";
+                let filtered = filterSubject === 'Barchasi' ? results : results.filter(r => r.subject === filterSubject);
+
+                if (filtered.length === 0) {
+                    noMsg.classList.remove("hidden");
+                    return;
+                } else {
+                    noMsg.classList.add("hidden");
+                }
+
+                filtered.forEach(item => {
+                    let tr = document.createElement("tr");
+                    tr.className = "border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition";
+                    tr.innerHTML = `
+                        <td class="px-4 py-3 font-semibold text-slate-800 dark:text-white">${item.name}</td>
+                        <td class="px-4 py-3"><span class="bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-lg text-xs font-bold">${item.subject}</span></td>
+                        <td class="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">${item.score}</td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400">${item.time}</td>
+                        <td class="px-4 py-3 text-right text-slate-400 text-xs">${item.date || 'Yangi'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error("Ma'lumotlarni o'qishda xatolik:", error);
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-500">Ma'lumotlarni yuklashda xatolik yuz berdi. Firebase sozlamalarini tekshiring.</td></tr>`;
+            }
+        };
+
+        // Sahifa yuklanganda reytingni chaqirish
+        window.addEventListener('DOMContentLoaded', () => {
+            loadLeaderboardFromFirebase('Barchasi');
+        });
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-cert-title { font-family: 'Montserrat', sans-serif; }
+        .font-cert-name { font-family: 'Great Vibes', cursive; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300">
+
+    <!-- Navigation Bar -->
+    <header class="bg-indigo-600 dark:bg-indigo-900 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="showSection('home-section')">
+                <i class="fas fa-graduation-cap text-2xl text-amber-300"></i>
+                <span class="font-bold text-xl tracking-tight">Maktab Testlari</span>
+            </div>
+            
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <div id="user-profile-badge" class="hidden items-center gap-2 bg-indigo-700/60 dark:bg-indigo-950 px-3 py-1.5 rounded-lg text-sm">
+                    <i class="fas fa-user-circle text-amber-300"></i>
+                    <span id="nav-username-display" class="font-semibold">O'quvchi</span>
+                    <button onclick="logoutUser()" title="Hisobdan chiqish" class="ml-2 text-indigo-200 hover:text-white transition">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+
+                <button onclick="toggleDarkMode()" class="bg-indigo-500 hover:bg-indigo-400 dark:bg-indigo-800 dark:hover:bg-indigo-700 text-white p-2 rounded-lg text-sm font-medium transition shadow-sm" title="Tungi rejim">
+                    <i id="theme-icon" class="fas fa-moon"></i>
+                </button>
+                <button onclick="showSection('home-section')" class="bg-indigo-500/80 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fas fa-home"></i>
+                    <span class="hidden sm:inline">Bosh sahifa</span>
+                </button>
+                <button onclick="showSection('results-section')" class="bg-indigo-700 hover:bg-indigo-800 dark:bg-indigo-950 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Natijalar</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-4xl mx-auto w-full p-4 sm:p-6 my-4 space-y-8">
+
+        <!-- 1. BOSH SAHIFA -->
+        <div id="home-section" class="space-y-8">
+            
+            <!-- MUALLIF HAQIDA -->
+            <section class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 md:p-8 border border-slate-100 dark:border-slate-700 transition-all duration-300">
+                <div class="flex flex-col md:flex-row items-center gap-6">
+                    <div class="w-28 h-28 bg-gradient-to-tr from-indigo-600 to-violet-600 rounded-2xl flex items-center justify-center text-white text-4xl font-bold shadow-lg shadow-indigo-200 dark:shadow-none shrink-0">
+                        AJ
+                    </div>
+                    <div class="space-y-3 text-center md:text-left flex-grow">
+                        <div>
+                            <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-white">Azatov Jahongir Nurali o'g'li</h2>
+                            <p class="text-indigo-600 dark:text-indigo-400 font-semibold text-sm mt-1">Maktab fanlari bo'yicha amaliyotchi va mukammal tajribaga ega testolog</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                            <div class="bg-indigo-50/60 dark:bg-slate-700/50 border border-indigo-100 dark:border-slate-600 p-3 rounded-xl text-center md:text-left">
+                                <div class="text-xs text-indigo-500 dark:text-indigo-300 font-medium">📐 Matematika</div>
+                                <div class="text-sm font-bold text-indigo-900 dark:text-indigo-200 mt-0.5">4 yillik tajriba</div>
+                            </div>
+                            <div class="bg-purple-50/60 dark:bg-slate-700/50 border border-purple-100 dark:border-slate-600 p-3 rounded-xl text-center md:text-left">
+                                <div class="text-xs text-purple-500 dark:text-purple-300 font-medium">🇬🇧 Ingliz tili</div>
+                                <div class="text-sm font-bold text-purple-900 dark:text-purple-200 mt-0.5">3 yillik tajriba</div>
+                            </div>
+                            <div class="bg-emerald-50/60 dark:bg-slate-700/50 border border-emerald-100 dark:border-slate-600 p-3 rounded-xl text-center md:text-left">
+                                <div class="text-xs text-emerald-500 dark:text-emerald-300 font-medium">⚛️ Barcha fanlar</div>
+                                <div class="text-sm font-bold text-emerald-900 dark:text-emerald-200 mt-0.5">3+ yillik tajriba</div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap justify-center md:justify-start gap-2 pt-2">
+                            <span class="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                                <i class="fas fa-certificate text-emerald-500"></i>
+                                Matematika — Milliy & Xalqaro Sertifikat
+                            </span>
+                            <span class="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                                <i class="fas fa-award text-amber-500"></i>
+                                Ingliz tili — Xalqaro Sertifikat
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FANLAR RO'YXATI -->
+            <section class="space-y-6">
+                <div class="text-center space-y-2">
+                    <h1 class="text-3xl font-extrabold text-slate-800 dark:text-white">Bilimingizni sinab ko'ring</h1>
+                    <p class="text-slate-600 dark:text-slate-300">O'zingizga kerakli fanni tanlang va savollar sonini o'zingiz belgilang</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                    <!-- Matematika -->
+                    <div onclick="openSetupModal('Matematika')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-indigo-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">📐</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 transition">Matematika</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Mantiqiy, formulali va murakkab masalalar.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-indigo-600 dark:text-indigo-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <!-- Ingliz tili -->
+                    <div onclick="openSetupModal('Ingliz tili')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">🇬🇧</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-purple-600 transition">Ingliz tili</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Advanced darajadagi grammatika va lug'at sinovlari.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-purple-600 dark:text-purple-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <!-- Huquq fani -->
+                    <div onclick="openSetupModal('Huquq fani')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">⚖️</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-blue-600 transition">Huquq fani</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Konstitutsiya, kodekslar va huquqiy vaziyatlar.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-blue-600 dark:text-blue-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <!-- Ona tili -->
+                    <div onclick="openSetupModal('Ona tili')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">📚</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-emerald-600 transition">Ona tili</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Chuqurlashtirilgan imlo, sintaksis va leksika.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <!-- Tarix -->
+                    <div onclick="openSetupModal('Tarix')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-amber-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">🏛️</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-amber-600 transition">Tarix</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Sana, shaxslar va jahon-tarixiy voqealar.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-amber-600 dark:text-amber-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <!-- Biologiya -->
+                    <div onclick="openSetupModal('Biologiya')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-teal-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-teal-100 dark:bg-teal-900/50 text-teal-600 dark:text-teal-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">🧬</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-teal-600 transition">Biologiya</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Genetika, anatomiya va ekologik jarayonlar.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-teal-600 dark:text-teal-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <!-- Kimyo -->
+                    <div onclick="openSetupModal('Kimyo')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-rose-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">🧪</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-rose-600 transition">Kimyo</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Reaksiyalar, organik va anorganik birikmalar.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-rose-600 dark:text-rose-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <!-- Fizika -->
+                    <div onclick="openSetupModal('Fizika')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-sky-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">⚛️</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-sky-600 transition">Fizika</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Formulalar, mexanika va elektrodinamika.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-sky-600 dark:text-sky-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+
+                    <!-- Informatika -->
+                    <div onclick="openSetupModal('Informatika')" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-cyan-500 hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between">
+                        <div class="space-y-3">
+                            <div class="w-12 h-12 bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400 rounded-xl flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">💻</div>
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-white group-hover:text-cyan-600 transition">Informatika</h3>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">Algoritmlar, Python va tarmoq texnologiyalari.</p>
+                        </div>
+                        <div class="mt-6 flex items-center justify-between text-cyan-600 dark:text-cyan-400 font-semibold text-sm">
+                            <span>Testni boshlash</span>
+                            <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 2. TEST YECHISH BO'LIMI -->
+        <section id="quiz-view" class="hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 md:p-8 border border-slate-100 dark:border-slate-700">
+            <div class="flex items-center justify-between border-b dark:border-slate-700 pb-4 mb-6">
+                <div>
+                    <span id="current-subject-title" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Matematika</span>
+                    <h2 class="text-lg font-bold text-slate-800 dark:text-white">Savol <span id="question-number">1</span> / <span id="total-questions">5</span></h2>
+                </div>
+                <div class="bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 px-3.5 py-1.5 rounded-xl text-indigo-700 dark:text-indigo-300 text-sm font-bold flex items-center gap-2">
+                    <i class="fas fa-stopwatch text-indigo-600 dark:text-indigo-400"></i>
+                    <span id="timer-text">00:00</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <p id="question-text" class="text-lg text-slate-800 dark:text-slate-100 font-medium leading-relaxed">
+                    Savol matni shu yerda chiqadi...
+                </p>
+            </div>
+
+            <div id="options-container" class="space-y-3 mb-8"></div>
+
+            <div class="flex justify-between items-center pt-4 border-t dark:border-slate-700">
+                <button onclick="showSection('home-section')" class="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                    Chiqish
+                </button>
+                <button id="next-btn" onclick="nextQuestion()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition shadow-md shadow-indigo-200 dark:shadow-none">
+                    Keyingisi
+                </button>
+            </div>
+        </section>
+
+        <!-- 3. TEST NATIJASI VA XATOLAR TAHLILI -->
+        <section id="result-view" class="hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 border border-slate-100 dark:border-slate-700 space-y-8">
+            <div class="text-center space-y-4">
+                <div class="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto text-3xl">
+                    🏆
+                </div>
+                <h2 class="text-2xl font-bold text-slate-800 dark:text-white">Test yakunlandi!</h2>
+                <p class="text-lg font-semibold text-indigo-600 dark:text-indigo-400" id="user-greeting">Barakalla!</p>
+                <p class="text-slate-600 dark:text-slate-300">Sizning erishgan natijangiz:</p>
+
+                <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+                    <div class="bg-slate-50 dark:bg-slate-700/50 border dark:border-slate-600 p-4 rounded-xl">
+                        <div class="text-3xl font-extrabold text-indigo-600 dark:text-indigo-400"><span id="score-text">0</span> / <span id="total-score-text">5</span></div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">To'g'ri javoblar</div>
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-700/50 border dark:border-slate-600 p-4 rounded-xl">
+                        <div class="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1" id="time-spent-text">00:00</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">Ketgan vaqt</div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap justify-center gap-3 pt-4">
+                    <button onclick="showSection('home-section')" class="px-6 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition shadow-md shadow-indigo-200 dark:shadow-none">
+                        Boshqa test yechish
+                    </button>
+                    <button onclick="downloadCertificate()" class="px-6 py-2.5 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition shadow-md shadow-emerald-200 dark:shadow-none flex items-center gap-2">
+                        <i class="fas fa-award"></i> Sertifikatni yuklab olish
+                    </button>
+                </div>
+            </div>
+
+            <!-- Xatolarni tahlil qilish -->
+            <div class="border-t dark:border-slate-700 pt-6 space-y-4">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-clipboard-list text-indigo-600"></i> Javoblar va xatolar tahlili
+                </h3>
+                <div id="review-container" class="space-y-4"></div>
+            </div>
+        </section>
+
+        <!-- 4. NATIJALAR VA REYTING SAHIFASI (Firebase bazasidan o'qiydi) -->
+        <section id="results-section" class="hidden bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 md:p-8 border border-slate-100 dark:border-slate-700">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 pb-4 border-b dark:border-slate-700">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800 dark:text-white">Fanlar bo'yicha umumiy reyting (Onlayn)</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Barcha o'quvchilarning Firebase bazasidagi real vaqtdagi natijalari</p>
+                </div>
+                <button onclick="loadLeaderboardFromFirebase('Barchasi')" class="text-xs text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-400 font-semibold border border-indigo-200 dark:border-indigo-900 px-3 py-1.5 rounded-lg transition">
+                    <i class="fas fa-sync-alt mr-1"></i> Yangilash
+                </button>
+            </div>
+
+            <!-- Filter tugmalari -->
+            <div class="flex flex-wrap gap-2 mb-6" id="subject-filter-tabs">
+                <button onclick="filterResults('Barchasi')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-indigo-600 text-white shadow-sm">Barchasi</button>
+                <button onclick="filterResults('Matematika')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Matematika</button>
+                <button onclick="filterResults('Ingliz tili')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Ingliz tili</button>
+                <button onclick="filterResults('Huquq fani')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Huquq fani</button>
+                <button onclick="filterResults('Ona tili')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Ona tili</button>
+                <button onclick="filterResults('Tarix')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Tarix</button>
+                <button onclick="filterResults('Biologiya')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Biologiya</button>
+                <button onclick="filterResults('Kimyo')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Kimyo</button>
+                <button onclick="filterResults('Fizika')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Fizika</button>
+                <button onclick="filterResults('Informatika')" class="filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600">Informatika</button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-slate-600 dark:text-slate-300">
+                    <thead class="text-xs uppercase bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                        <tr>
+                            <th class="px-4 py-3 rounded-l-lg">O'quvchi F.I.SH</th>
+                            <th class="px-4 py-3">Fan</th>
+                            <th class="px-4 py-3">Natija (To'g'ri)</th>
+                            <th class="px-4 py-3">Sarflangan vaqt</th>
+                            <th class="px-4 py-3 rounded-r-lg text-right">Sana va Vaqt</th>
+                        </tr>
+                    </thead>
+                    <tbody id="full-leaderboard-body"></tbody>
+                </table>
+            </div>
+            <div id="no-results-msg" class="hidden text-center py-10 text-slate-400">
+                <i class="fas fa-info-circle text-2xl mb-2"></i>
+                <p>Hozircha bu fandan natijalar mavjud emas.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER QISMI -->
+    <footer class="bg-slate-900 text-slate-400 py-6 border-t border-slate-800 mt-auto text-center text-sm">
+        <div class="max-w-6xl mx-auto px-4 space-y-1">
+            <p>&copy; 2026 Maktab Fanlaridan Onlayn Testlar. Barcha huquqlar himoyalangan.</p>
+            <p class="text-slate-300 font-medium">Loyiha muallifi: <span class="text-amber-400 font-bold">Azatov Jahongir Nurali o'g'li</span></p>
+        </div>
+    </footer>
+
+    <!-- TEST SOZLAMALARI MODALI -->
+    <div id="setup-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl border dark:border-slate-700">
+            <h3 class="text-xl font-bold text-slate-800 dark:text-white" id="modal-subject-title">Test Sozlamalari</h3>
+            
+            <div id="name-input-group" class="space-y-2">
+                <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Ism va Familiyangiz:</label>
+                <input type="text" id="username-input" placeholder="Masalan: Anvar Toshmatov" class="w-full px-4 py-3 rounded-xl border dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Nechta savol ishlamoqchisiz? (O'zingiz kiriting):</label>
+                <input type="number" id="question-count-input" value="10" min="1" max="30" placeholder="Masalan: 15" class="w-full px-4 py-3 rounded-xl border dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <p class="text-xs text-slate-400">Har bir fanda mutlaqo har xil va takrorlanmas savollar bazasi mavjud.</p>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeSetupModal()" class="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Bekor qilish</button>
+                <button onclick="confirmAndStartQuiz()" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition shadow-md">Boshlash</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SERTIFIKAT DIZAYNI (PDF UCHUN) -->
+    <div id="certificate-template" class="hidden">
+        <div id="cert-box" style="width: 800px; height: 565px; background: #ffffff; position: relative; padding: 40px; box-sizing: border-box; border: 12px solid #4f46e5; font-family: 'Montserrat', sans-serif; display: flex; flex-direction: column; justify-content: space-between; text-align: center;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid #c7d2fe; margin: 8px; pointer-events: none;"></div>
+            <div>
+                <h4 style="color: #4f46e5; font-size: 14px; text-transform: uppercase; letter-spacing: 3px; margin: 0 0 5px 0;">O'zbekiston Maktablari Onlayn Platformasi</h4>
+                <h1 style="color: #1e293b; font-size: 28px; font-weight: 800; margin: 0; text-transform: uppercase;">Sertifikat</h1>
+                <p style="color: #64748b; font-size: 11px; margin: 5px 0 0 0;">Ushbu sertifikat quyidagi o'quvchiga beriladi:</p>
+            </div>
+            <div>
+                <h2 id="cert-student-name" style="color: #4f46e5; font-size: 38px; font-family: 'Great Vibes', cursive; margin: 5px 0; border-bottom: 2px dashed #cbd5e1; display: inline-block; padding: 0 30px;">O'quvchi F.I.SH</h2>
+                <p style="color: #334155; font-size: 13px; margin: 10px 0 0 0;">
+                    <strong id="cert-subject-name">Matematika</strong> fanidan muvaffaqiyatli test sinovini topshirib, yuqori bilim darajasini namoyish etgani uchun taqdirlanadi.
+                </p>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                <div style="text-align: left;">
+                    <p style="margin: 0; font-size: 11px; color: #64748b;">Natija: <strong id="cert-score" style="color: #0f172a;">0 / 0</strong></p>
+                    <p style="margin: 3px 0 0 0; font-size: 11px; color: #64748b;">Sana: <strong id="cert-date" style="color: #0f172a;">01.01.2026</strong></p>
+                </div>
+                <div style="text-align: right;">
+                    <p style="margin: 0; font-size: 13px; font-weight: 700; color: #1e293b;">Azatov Jahongir Nurali o'g'li</p>
+                    <p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">Testolog / Rahbar</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logika -->
+    <script>
+        const subjectsData = {
+            "Matematika": [
+                { q: "Agar x = 5 bo'lsa, 3x + 10 ifodaning qiymatini toping?", options: ["20", "25", "15", "30"], answer: 1 },
+                { q: "Kvadratning yuzi 36 sm² ga teng bo'lsa, uning perimetrini toping?", options: ["12 sm", "18 sm", "24 sm", "30 sm"], answer: 2 },
+                { q: "120 ning 20 foizini toping?", options: ["20", "24", "30", "15"], answer: 1 },
+                { q: "Tenglamani yeching: 2x - 4 = 10", options: ["x = 5", "x = 7", "x = 6", "x = 8"], answer: 1 },
+                { q: "Uchburchakning burchaklari yig'indisi nechiga teng?", options: ["90°", "180°", "360°", "270°"], answer: 1 },
+                { q: "5 ning kubi nechiga teng?", options: ["25", "125", "75", "625"], answer: 1 },
+                { q: "Doiraning radiusi 4 sm bo'lsa, uning diametrini toping?", options: ["8 sm", "16 sm", "2 sm", "12 sm"], answer: 0 },
+                { q: "Agar 4 ta daftar 12000 so'm tursa, 7 ta shunday daftar qancha turadi?", options: ["18000 so'm", "21000 so'm", "24000 so'm", "19000 so'm"], answer: 1 },
+                { q: "Logarithm: log2(32) ning qiymati nechaga teng?", options: ["4", "5", "6", "3"], answer: 1 },
+                { q: "Proporsiyani yeching: x / 4 = 15 / 5", options: ["10", "12", "8", "14"], answer: 1 },
+                { q: "Agar to'g'ri to'rtburchakning eni 4 sm, bo'yi 9 sm bo'lsa, uning yuzini toping?", options: ["13 sm²", "36 sm²", "26 sm²", "18 sm²"], answer: 1 },
+                { q: "Kvadrat ildizni toping: √196", options: ["12", "13", "14", "15"], answer: 2 },
+                { q: "3 soatda necha minut bor?", options: ["120 minut", "180 minut", "210 minut", "150 minut"], answer: 1 },
+                { q: "0.5 sonini oddiy kasr ko'rinishida yozing:", options: ["1/3", "1/4", "1/2", "3/4"], answer: 2 },
+                { q: "Proporsiyaning noma'lum hadini toping: 3:x = 6:8", options: ["4", "5", "3", "6"], answer: 0 }
+            ],
+            "Ingliz tili": [
+                { q: "Choose the correct form: She _____ to school every day.", options: ["go", "goes", "going", "gone"], answer: 1 },
+                { q: "What is the past tense of the verb 'to write'?", options: ["writed", "written", "wrote", "writing"], answer: 2 },
+                { q: "Choose the correct antonym of the word 'Big':", options: ["Huge", "Small", "Tall", "Fast"], answer: 1 },
+                { q: "Which sentence is in the Present Continuous tense?", options: ["I play football.", "I am playing football.", "I played football.", "I will play football."], answer: 1 },
+                { q: "Complete the phrase: 'As busy as a _____'", options: ["bee", "dog", "cat", "lion"], answer: 0 },
+                { q: "Choose the correct modal verb: You _____ obey school rules.", options: ["must", "can", "may", "might"], answer: 0 },
+                { q: "What is the plural form of 'child'?", options: ["childs", "childes", "children", "child"], answer: 2 },
+                { q: "Identify the adjective in this sentence: 'The red car is fast.'", options: ["car", "fast", "red", "is"], answer: 2 },
+                { q: "Which word is spelled correctly?", options: ["Receive", "Recieve", "Reseive", "Resive"], answer: 0 },
+                { q: "Translate into English: 'Men kitob o'qiyapman'", options: ["I read a book", "I am reading a book", "I was reading a book", "I will read a book"], answer: 1 },
+                { q: "Choose the correct preposition: He is good _____ mathematics.", options: ["in", "at", "on", "with"], answer: 1 },
+                { q: "What is the synonym of 'Smart'?", options: ["Clever", "Slow", "Sad", "Bad"], answer: 0 }
+            ],
+            "Huquq fani": [
+                { q: "O'zbekiston Respublikasining Konstitutsiyasi qachon qabul qilingan?", options: ["1991-yil 31-avgust", "1992-yil 8-dekabr", "1993-yil 2-iyul", "1995-yil 14-yanvar"], answer: 1 },
+                { q: "O'zbekiston Respublikasida Oliy qonun chiqaruvchi organ qaysi?", options: ["Vazirlar Mahkamasi", "Oliy Majlis", "Prezident devoni", "Konstitutsiyaviy sud"], answer: 1 },
+                { q: "Fuqarolarning huquq va erkinliklarining kafili kim?", options: ["Sudlar", "Prezident", "Prokuratura", "Ichki ishlar vazirligi"], answer: 1 },
+                { q: "O'zbekiston Respublikasida necha yoshdan boshlab ovoz berish huquqi beriladi?", options: ["16 yosh", "18 yosh", "21 yosh", "25 yosh"], answer: 1 },
+                { q: "Mehnat kodeksiga ko'ra normal ish haftasining davomiyligi necha soatni tashkil etadi?", options: ["36 soat", "40 soat", "48 soat", "30 soat"], answer: 1 },
+                { q: "O'zbekiston Respublikasining Davlat madhiyasi muallifi kim?", options: ["Abdulla Oripov", "Erkin Vohidov", "Uyg'un", "Halim To'xtayev"], answer: 0 }
+            ],
+            "Ona tili": [
+                { q: "Qaysi so'zda imlo xatosi mavjud?", options: ["Maktab", "Kitob", "Afttobus", "Daftar"], answer: 2 },
+                { q: "Fe'l turkumiga oid so'zni toping?", options: ["Chiroyli", "Yugurmoq", "Baland", "Oltinchi"], answer: 1 },
+                { q: "Tub so'zni ko'rsating:", options: ["Bog'bon", "O'qituvchi", "Daryo", "Tuzli"], answer: 2 },
+                { q: "Qaratqich kelishigining qo'shimchasi qaysi?", options: ["-ning", "-ni", "-ga", "-da"], answer: 0 },
+                { q: "Sinonim so'zlarni toping:", options: ["Katta - Kichik", "Go'zal - Chiroyli", "Issiq - Sovuq", "Tez - Sekin"], answer: 1 },
+                { q: "Imlo qoidasiga ko'ra to'g'ri yozilgan so'zni toping:", options: ["Metall", "Metal", "Mettal", "Metol"], answer: 0 }
+            ],
+            "Tarix": [
+                { q: "Amir Temur qachon tavallud topgan?", options: ["1336-yil", "1370-yil", "1405-yil", "1226-yil"], answer: 0 },
+                { q: "Buyuk ipak yo'li necha ming yillik tarixga ega?", options: ["1 ming yillik", "2 ming yillik", "3 ming yillik", "5 ming yillik"], answer: 1 },
+                { q: "Xiva xonligi qachon tashkil topgan?", options: ["1500-yil", "1511-yil", "1709-yil", "1876-yil"], answer: 1 },
+                { q: "O'zbekiston Respublikasi Mustaqilligi kuni qachon nishonlanadi?", options: ["1-sentabr", "8-dekabr", "14-yanvar", "21-mart"], answer: 0 },
+                { q: "Qadimiy Sug'd davlatining poytaxti qaysi shahar bo'lgan?", options: ["Afrasiyob (Samarqand)", "Buxoro", "Poykent", "Varaxsha"], answer: 0 }
+            ],
+            "Biologiya": [
+                { q: "Hujayraning energetik markazi qaysi organoid?", options: ["Ribosoma", "Mitoxondriya", "Vakuola", "Lizosoma"], answer: 1 },
+                { q: "Odam organizmida nechta suyak mavjud (taxminan kattalarda)?", options: ["206", "150", "300", "240"], answer: 0 },
+                { q: "Fotosintez jarayonida qaysi gaz yutiladi?", options: ["Kislorod", "Uglerod dioksidi", "Azot", "Vodorod"], answer: 1 },
+                { q: "DNK molekulyar tuzilishi qanday shaklda?", options: ["Bir zanjirli", "Ikki qo'sh spiral", "Halqasimon", "Uchburchak"], answer: 1 },
+                { q: "Qon guruhlari soni nechta asosiy guruhga bo'linadi?", options: ["2 ta", "3 ta", "4 ta", "5 ta"], answer: 2 }
+            ],
+            "Kimyo": [
+                { q: "Suvning kimyoviy formulasi qanday?", options: ["H2O", "CO2", "NaCl", "NH3"], answer: 0 },
+                { q: "Mendeleyev jadvalidagi birinchi element qaysi?", options: ["Geliy", "Vodorod", "Kislorod", "Uglerod"], answer: 1 },
+                { q: "Osh tuzining kimyoviy nomi nima?", options: ["Natriy xlorid", "Kalsiy karbonat", "Magniy sulfat", "Kaliy permanganat"], answer: 0 },
+                { q: "Havo asosan qaysi gazlardan iborat?", options: ["Kislorod va Vodorod", "Azot va Kislorod", "Uglerod va Geliy", "Neon va Argon"], answer: 1 },
+                { q: "Kislotali muhitni aniqlovchi indikator qaysi?", options: ["Lakmus", "Suv", "Spirt", "Tuz"], answer: 0 }
+            ],
+            "Fizika": [
+                { q: "Tezlikni topish formulasi qaysi?", options: ["v = S / t", "v = s * t", "v = a * t", "v = F / m"], answer: 0 },
+                { q: "Elektr toki birligi nima?", options: ["Volt", "Amper", "Ohm", "Vatt"], answer: 1 },
+                { q: "Yerning tortishish tezlanishi (g) taxminan nechiga teng?", options: ["9.8 m/s²", "5.2 m/s²", "10.5 m/s²", "8.1 m/s²"], answer: 0 },
+                { q: "Bosimning birligi nima deb ataladi?", options: ["Joul", "Nyuton", "Paskal", "Herts"], answer: 2 },
+                { q: "Yorug'lik tezligi vakuumda qancha?", options: ["300 000 km/s", "150 000 km/s", "3 000 km/s", "1 080 km/s"], answer: 0 }
+            ],
+            "Informatika": [
+                { q: "Kompyuterning asosiy axborot kiritish qurilmasi qaysi?", options: ["Monitor", "Klaviatura", "Printer", "Kolonka"], answer: 1 },
+                { q: "1 Bayt nechta bitdan iborat?", options: ["4", "8", "16", "32"], answer: 1 },
+                { q: "Python dasturlash tilida ekranga chiqarish buyrug'i qaysi?", options: ["echo", "print", "output", "write"], answer: 1 },
+                { q: "Internet tarmog'ining asosiy protokoli qaysi?", options: ["TCP/IP", "HTTP", "FTP", "USB"], answer: 0 },
+                { q: "Qaysi biri operatsion tizimga kirmaydi?", options: ["Windows", "Linux", "Microsoft Word", "macOS"], answer: 2 }
+            ]
+        };
+
+        let currentSubject = "";
+        let currentQuestions = [];
+        let currentIndex = 0;
+        let score = 0;
+        let userAnswers = [];
+        let userName = "";
+        let timerInterval = null;
+        let secondsElapsed = 0;
+
+        window.onload = function() {
+            checkUserSession();
+        };
+
+        function checkUserSession() {
+            const savedName = localStorage.getItem("current_username");
+            if (savedName) {
+                userName = savedName;
+                document.getElementById("user-profile-badge").classList.remove("hidden");
+                document.getElementById("user-profile-badge").classList.add("flex");
+                document.getElementById("nav-username-display").innerText = userName;
+            }
+        }
+
+        function logoutUser() {
+            localStorage.removeItem("current_username");
+            userName = "";
+            document.getElementById("user-profile-badge").classList.remove("flex");
+            document.getElementById("user-profile-badge").classList.add("hidden");
+            alert("Hisobdan muvaffaqiyatli chiqildi!");
+        }
+
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            const icon = document.getElementById("theme-icon");
+            if (html.classList.contains('light')) {
+                html.classList.remove('light');
+                html.classList.add('dark');
+                icon.className = "fas fa-sun";
+                localStorage.setItem("theme", "dark");
+            } else {
+                html.classList.remove('dark');
+                html.classList.add('light');
+                icon.className = "fas fa-moon";
+                localStorage.setItem("theme", "light");
+            }
+        }
+
+        if (localStorage.getItem("theme") === "dark") {
+            document.documentElement.classList.remove('light');
+            document.documentElement.classList.add('dark');
+            document.getElementById("theme-icon").className = "fas fa-sun";
+        }
+
+        function showSection(sectionId) {
+            document.getElementById("home-section").classList.add("hidden");
+            document.getElementById("quiz-view").classList.add("hidden");
+            document.getElementById("result-view").classList.add("hidden");
+            document.getElementById("results-section").classList.add("hidden");
+
+            document.getElementById(sectionId).classList.remove("hidden");
+            if (sectionId === 'results-section') {
+                loadLeaderboardFromFirebase('Barchasi');
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function openSetupModal(subject) {
+            currentSubject = subject;
+            document.getElementById("modal-subject-title").innerText = `${subject} - Test Sozlamalari`;
+            
+            const nameGroup = document.getElementById("name-input-group");
+            if (userName) {
+                nameGroup.classList.add("hidden");
+            } else {
+                nameGroup.classList.remove("hidden");
+            }
+            document.getElementById("setup-modal").classList.remove("hidden");
+        }
+
+        function closeSetupModal() {
+            document.getElementById("setup-modal").classList.add("hidden");
+        }
+
+        function confirmAndStartQuiz() {
+            if (!userName) {
+                const inputVal = document.getElementById("username-input").value.trim();
+                if (!inputVal) {
+                    alert("Iltimos, ism va familiyangizni kiriting!");
+                    return;
+                }
+                userName = inputVal;
+                localStorage.setItem("current_username", userName);
+                checkUserSession();
+            }
+
+            let countInput = parseInt(document.getElementById("question-count-input").value) || 10;
+            const pool = subjectsData[currentSubject] || subjectsData["Matematika"];
+            
+            let shuffled = [...pool].sort(() => 0.5 - Math.random());
+            currentQuestions = shuffled.slice(0, Math.min(countInput, shuffled.length));
+
+            closeSetupModal();
+            startQuiz();
+        }
+
+        function startQuiz() {
+            currentIndex = 0;
+            score = 0;
+            userAnswers = [];
+            secondsElapsed = 0;
+
+            document.getElementById("current-subject-title").innerText = currentSubject;
+            document.getElementById("total-questions").innerText = currentQuestions.length;
+            
+            showSection('quiz-view');
+            startTimer();
+            loadQuestion();
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                secondsElapsed++;
+                let mins = Math.floor(secondsElapsed / 60);
+                let secs = secondsElapsed % 60;
+                document.getElementById("timer-text").innerText = 
+                    `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function loadQuestion() {
+            let qData = currentQuestions[currentIndex];
+            document.getElementById("question-number").innerText = currentIndex + 1;
+            document.getElementById("question-text").innerText = qData.q;
+
+            let container = document.getElementById("options-container");
+            container.innerHTML = "";
+
+            qData.options.forEach((opt, idx) => {
+                let btn = document.createElement("button");
+                btn.className = "w-full text-left px-4 py-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:border-indigo-300 font-medium transition flex items-center justify-between";
+                btn.innerHTML = `<span>${opt}</span><span class="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 flex items-center justify-center text-xs text-slate-400">${String.fromCharCode(65 + idx)}</span>`;
+                btn.onclick = () => selectOption(idx, btn);
+                container.appendChild(btn);
+            });
+
+            document.getElementById("next-btn").innerText = (currentIndex === currentQuestions.length - 1) ? "Yakunlash" : "Keyingisi";
+        }
+
+        function selectOption(selectedIdx, btnElement) {
+            let buttons = document.getElementById("options-container").getElementsByTagName("button");
+            for (let b of buttons) {
+                b.classList.remove("border-indigo-600", "bg-indigo-50", "dark:bg-indigo-950/40", "dark:border-indigo-500");
+            }
+            btnElement.classList.add("border-indigo-600", "bg-indigo-50", "dark:bg-indigo-950/40", "dark:border-indigo-500");
+            btnElement.dataset.selected = selectedIdx;
+        }
+
+        function nextQuestion() {
+            let buttons = document.getElementById("options-container").getElementsByTagName("button");
+            let selectedIdx = -1;
+            for (let i = 0; i < buttons.length; i++) {
+                if (buttons[i].dataset.selected !== undefined) {
+                    selectedIdx = parseInt(buttons[i].dataset.selected);
+                    break;
+                }
+            }
+
+            if (selectedIdx === -1) {
+                alert("Iltimos, javoblardan birini tanlang!");
+                return;
+            }
+
+            let qData = currentQuestions[currentIndex];
+            let isCorrect = (selectedIdx === qData.answer);
+            if (isCorrect) score++;
+
+            userAnswers.push({
+                question: qData.q,
+                options: qData.options,
+                correctAnswer: qData.answer,
+                userAnswer: selectedIdx,
+                isCorrect: isCorrect
+            });
+
+            currentIndex++;
+            if (currentIndex < currentQuestions.length) {
+                loadQuestion();
+            } else {
+                finishQuiz();
+            }
+        }
+
+        function finishQuiz() {
+            clearInterval(timerInterval);
+            showSection('result-view');
+
+            document.getElementById("user-greeting").innerText = `Barakalla, ${userName}!`;
+            document.getElementById("score-text").innerText = score;
+            document.getElementById("total-score-text").innerText = currentQuestions.length;
+            
+            let mins = Math.floor(secondsElapsed / 60);
+            let secs = secondsElapsed % 60;
+            let timeStr = `${mins > 0 ? mins + ' min ' : ''}${secs} sek`;
+            document.getElementById("time-spent-text").innerText = timeStr;
+
+            let reviewContainer = document.getElementById("review-container");
+            reviewContainer.innerHTML = "";
+
+            userAnswers.forEach((item, index) => {
+                let div = document.createElement("div");
+                div.className = `p-4 rounded-xl border ${item.isCorrect ? 'bg-emerald-50/40 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900' : 'bg-rose-50/40 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900'}`;
+                
+                let optionsHtml = item.options.map((opt, oIdx) => {
+                    let style = "";
+                    if (oIdx === item.correctAnswer) style = "font-weight: bold; color: #059669;";
+                    if (oIdx === item.userAnswer && !item.isCorrect) style = "text-decoration: line-through; color: #e11d48;";
+                    return `<div style="${style}">• ${opt} ${oIdx === item.correctAnswer ? '(To\'g\'ri javob)' : ''}</div>`;
+                }).join('');
+
+                div.innerHTML = `
+                    <div class="flex items-start justify-between gap-2">
+                        <h4 class="font-semibold text-slate-800 dark:text-white text-sm">${index + 1}. ${item.question}</h4>
+                        <span class="text-xs font-bold px-2.5 py-1 rounded-full ${item.isCorrect ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300'}">
+                            ${item.isCorrect ? "To'g'ri" : "Xato"}
+                        </span>
+                    </div>
+                    <div class="mt-2 text-xs space-y-1 text-slate-600 dark:text-slate-300">${optionsHtml}</div>
+                `;
+                reviewContainer.appendChild(div);
+            });
+
+            // Natijani Firebase'ga yuborish
+            let now = new Date();
+            let dateStr = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            let timeFormatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+            if (window.saveResultToFirebase) {
+                window.saveResultToFirebase({
+                    name: userName,
+                    subject: currentSubject,
+                    score: `${score} / ${currentQuestions.length}`,
+                    time: timeFormatted,
+                    date: dateStr
+                });
+            }
+        }
+
+        function filterResults(subject) {
+            let tabs = document.getElementsByClassName("filter-tab-btn");
+            for (let t of tabs) {
+                t.className = "filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-600";
+            }
+            event.target.className = "filter-tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition bg-indigo-600 text-white shadow-sm";
+            if (window.loadLeaderboardFromFirebase) {
+                window.loadLeaderboardFromFirebase(subject);
+            }
+        }
+
+        async function downloadCertificate() {
+            document.getElementById("cert-student-name").innerText = userName;
+            document.getElementById("cert-subject-name").innerText = currentSubject;
+            document.getElementById("cert-score").innerText = `${score} / ${currentQuestions.length}`;
+            
+            let now = new Date();
+            document.getElementById("cert-date").innerText = now.toLocaleDateString();
+
+            let certEl = document.getElementById("certificate-template");
+            certEl.classList.remove("hidden");
+
+            try {
+                const canvas = await html2canvas(document.getElementById("cert-box"), { scale: 2 });
+                const imgData = canvas.toDataURL('image/png');
+                
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('landscape', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                
+                pdf.addImage(imgData, 'PNG', 0, (pdf.internal.pageSize.getHeight() - pdfHeight) / 2, pdfWidth, pdfHeight);
+                pdf.save(`Sertifikat_${userName}_${currentSubject}.pdf`);
+            } catch (err) {
+                console.error(err);
+                alert("Sertifikatni yaratishda xatolik yuz berdi!");
+            } finally {
+                certEl.classList.add("hidden");
+            }
+        }
+    </script>
+</body>
+</html>
